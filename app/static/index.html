@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hybrid Search</title>
+<style>
+  :root {
+    --bg: #f7f6f2; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a66;
+    --line: #e2e0d9; --accent: #2f5d8a; --accent-soft: #e6eef6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141413; --card: #1e1e1c; --ink: #ecebe6; --muted: #9b9a94;
+            --line: #33322f; --accent: #8fb6dc; --accent-soft: #23303d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  form { display: flex; gap: 8px; }
+  input[type=search] { flex: 1; padding: 12px 14px; font: inherit; color: inherit;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button { padding: 0 18px; font: inherit; font-weight: 600; border: 0; border-radius: 10px;
+    background: var(--accent); color: var(--bg); cursor: pointer; }
+  .modes { display: inline-flex; margin: 14px 0 26px; border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden; background: var(--card); }
+  .modes label { padding: 6px 14px; cursor: pointer; font-size: 14px; color: var(--muted); }
+  .modes input { display: none; }
+  .modes input:checked + span { color: var(--accent); font-weight: 600; }
+  .modes label:has(input:checked) { background: var(--accent-soft); }
+  .hit { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 12px; }
+  .hit h2 { font-size: 16px; margin: 0 0 6px; }
+  .hit p { margin: 0; color: var(--muted); font-size: 14px; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .status { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hybrid Search</h1>
+  <p class="sub">5,000+ scientific abstracts · BM25 + embeddings, fused with Reciprocal Rank Fusion</p>
+
+  <form id="f">
+    <input type="search" id="q" placeholder="e.g. vitamin D lowers the risk of fractures" autofocus>
+    <button>Search</button>
+  </form>
+  <div class="modes" role="radiogroup" aria-label="Search mode">
+    <label><input type="radio" name="mode" value="bm25"><span>BM25</span></label>
+    <label><input type="radio" name="mode" value="vector"><span>Vector</span></label>
+    <label><input type="radio" name="mode" value="hybrid" checked><span>Hybrid</span></label>
+  </div>
+
+  <div id="results"></div>
+</main>
+<script>
+  const f = document.getElementById("f"), q = document.getElementById("q"),
+        out = document.getElementById("results");
+  const esc = s => s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  async function run() {
+    const query = q.value.trim();
+    if (!query) return;
+    const mode = document.querySelector("input[name=mode]:checked").value;
+    out.innerHTML = '<p class="status">Searching…</p>';
+    const t0 = performance.now();
+    try {
+      const r = await fetch(`/api/search?q=${encodeURIComponent(query)}&mode=${mode}&k=10`);
+      if (!r.ok) throw new Error(r.status);
+      const data = await r.json();
+      const ms = Math.round(performance.now() - t0);
+      if (!data.hits.length) { out.innerHTML = '<p class="status">No results.</p>'; return; }
+      out.innerHTML = `<p class="status">${data.hits.length} results · ${mode} · ${ms} ms</p>` +
+        data.hits.map((h, i) => `
+          <article class="hit">
+            <h2>${i + 1}. ${esc(h.title || "(untitled)")}</h2>
+            <p>${esc(h.snippet)}</p>
+            <div class="meta">doc ${esc(h.doc_id)}</div>
+          </article>`).join("");
+    } catch (e) {
+      out.innerHTML = `<p class="status">Search failed (${esc(String(e.message))}). Is the index built?</p>`;
+    }
+  }
+  f.addEventListener("submit", e => { e.preventDefault(); run(); });
+  document.querySelectorAll("input[name=mode]").forEach(r => r.addEventListener("change", run));
+</script>
+</body>
+</html>
