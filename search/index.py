@@ -5,6 +5,8 @@ Layout on disk (one folder):
     embeddings.npy   one normalized vector per document, row i = rowid i+1
 """
 
+from __future__ import annotations
+
 import re
 import sqlite3
 from dataclasses import dataclass

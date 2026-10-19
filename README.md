@@ -37,19 +37,25 @@ flowchart LR
 
 ## Ergebnisse
 
-Evaluation auf dem SciFact-Testset (300 Anfragen mit Relevanzbewertungen):
-
-<!-- Nach `python -m search.evaluate` die Tabelle aus results.md hier einfügen -->
+Evaluation auf dem SciFact-Testset (300 Anfragen mit Relevanzbewertungen), Modell `all-MiniLM-L6-v2`:
 
 | Methode | nDCG@10 | Recall@10 | MRR@10 |
 |---|---|---|---|
-| BM25 | – | – | – |
-| Vektor | – | – | – |
-| Hybrid | – | – | – |
+| BM25 | 0.689 | 0.816 | 0.654 |
+| Vektor | 0.648 | 0.788 | 0.607 |
+| **Hybrid (RRF)** | **0.715** | **0.855** | **0.676** |
+
+**Erkenntnisse:**
+- Die hybride Suche ist in allen drei Metriken am besten: +2,6 Punkte nDCG@10 gegenüber BM25 und +6,7 gegenüber der reinen Vektorsuche.
+- Auf wissenschaftlichen Texten schlägt BM25 die reine Vektorsuche, weil exakte Fachbegriffe (Gene, Medikamente, Krankheiten) viel Gewicht haben. Ein kleines, allgemeines Embedding-Modell kennt diese Begriffe schlechter.
+- Die Fusion lohnt sich trotzdem: Beide Methoden finden teilweise unterschiedliche relevante Dokumente, RRF kombiniert ihre Stärken.
 
 ## Schnellstart
 
-Voraussetzung: Python 3.10 oder neuer.
+Voraussetzung: Python 3.9 oder neuer.
+
+> **Hinweis für Intel-Macs:** Für Intel-Macs gibt es PyTorch nur bis Version 2.2.2. Dann nach `pip install -r requirements.txt` zusätzlich ausführen:
+> `pip install "numpy<2" "transformers<4.50" "sentence-transformers<4"`
 
 ```bash
 git clone https://github.com/MertErbasaran/hybrid-search.git
