@@ -1,60 +1,60 @@
 # Hybrid Search 🔍
 
-Eine Suchmaschine für über 5.000 wissenschaftliche Abstracts, die **klassische Stichwortsuche (BM25)** und **semantische Vektorsuche (Embeddings)** kombiniert und beide Ergebnislisten mit **Reciprocal Rank Fusion (RRF)** zusammenführt. Die Suchqualität wird mit echten Relevanzbewertungen aus dem [BEIR-Benchmark](https://github.com/beir-cellar/beir) gemessen.
+A search engine for 5,000+ scientific abstracts that combines **classic keyword search (BM25)** with **semantic vector search (embeddings)** and merges both result lists using **Reciprocal Rank Fusion (RRF)**. Search quality is measured against real relevance judgements from the [BEIR benchmark](https://github.com/beir-cellar/beir).
 
 **Stack:** Python · SQLite FTS5 · sentence-transformers · NumPy · FastAPI · pytest
 
-## Warum hybrid?
+## Why hybrid?
 
-| | Stärke | Schwäche |
+| | Strength | Weakness |
 |---|---|---|
-| **BM25** (Stichworte) | findet exakte Begriffe, Abkürzungen, Fachwörter | versteht keine Synonyme („car“ ≠ „vehicle“) |
-| **Vektorsuche** (Embeddings) | versteht Bedeutung und Umschreibungen | übersieht manchmal exakte Begriffe |
-| **Hybrid (RRF)** | kombiniert beides | etwas mehr Rechenaufwand |
+| **BM25** (keywords) | finds exact terms, abbreviations, technical vocabulary | doesn't understand synonyms ("car" ≠ "vehicle") |
+| **Vector search** (embeddings) | understands meaning and paraphrases | sometimes misses exact terms |
+| **Hybrid (RRF)** | combines both | slightly more compute |
 
-RRF nutzt nur die **Ränge** der Treffer, nicht die Rohwerte. Das ist praktisch, weil BM25-Scores und Kosinus-Ähnlichkeiten auf völlig unterschiedlichen Skalen liegen:
+RRF only uses the **ranks** of the results, not the raw scores. That matters because BM25 scores and cosine similarities live on completely different scales:
 
 ```
-score(d) = Σ  1 / (k + rang_i(d))      mit k = 60
+score(d) = Σ  1 / (k + rank_i(d))      with k = 60
 ```
 
-## Architektur
+## Architecture
 
 ```mermaid
 flowchart LR
-    Q[Suchanfrage] --> B[BM25<br/>SQLite FTS5]
+    Q[Query] --> B[BM25<br/>SQLite FTS5]
     Q --> E[Embedding<br/>MiniLM]
-    E --> V[Vektorsuche<br/>Kosinus, NumPy]
+    E --> V[Vector search<br/>cosine, NumPy]
     B --> R[Reciprocal<br/>Rank Fusion]
     V --> R
-    R --> T[Top-k Treffer]
+    R --> T[Top-k results]
 ```
 
-- **Volltextindex:** SQLite FTS5 mit Porter-Stemming und eingebautem BM25-Ranking (Titel doppelt gewichtet)
-- **Vektorindex:** normalisierte Embeddings als NumPy-Matrix, Top-k per `argpartition`
-- **Modell:** [`all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2), klein und schnell genug für eine CPU
-- **API:** FastAPI mit Suchseite unter `/` und automatischer API-Doku unter `/docs`
+- **Full-text index:** SQLite FTS5 with Porter stemming and built-in BM25 ranking (titles weighted 2×)
+- **Vector index:** normalized embeddings stored as a NumPy matrix, top-k via `argpartition`
+- **Model:** [`all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2), small and fast enough to run on a CPU
+- **API:** FastAPI with a search page at `/` and auto-generated API docs at `/docs`
 
-## Ergebnisse
+## Results
 
-Evaluation auf dem SciFact-Testset (300 Anfragen mit Relevanzbewertungen), Modell `all-MiniLM-L6-v2`:
+Evaluation on the SciFact test set (300 queries with relevance judgements), model `all-MiniLM-L6-v2`:
 
-| Methode | nDCG@10 | Recall@10 | MRR@10 |
+| Method | nDCG@10 | Recall@10 | MRR@10 |
 |---|---|---|---|
 | BM25 | 0.689 | 0.816 | 0.654 |
-| Vektor | 0.648 | 0.788 | 0.607 |
+| Vector | 0.648 | 0.788 | 0.607 |
 | **Hybrid (RRF)** | **0.715** | **0.855** | **0.676** |
 
-**Erkenntnisse:**
-- Die hybride Suche ist in allen drei Metriken am besten: +2,6 Punkte nDCG@10 gegenüber BM25 und +6,7 gegenüber der reinen Vektorsuche.
-- Auf wissenschaftlichen Texten schlägt BM25 die reine Vektorsuche, weil exakte Fachbegriffe (Gene, Medikamente, Krankheiten) viel Gewicht haben. Ein kleines, allgemeines Embedding-Modell kennt diese Begriffe schlechter.
-- Die Fusion lohnt sich trotzdem: Beide Methoden finden teilweise unterschiedliche relevante Dokumente, RRF kombiniert ihre Stärken.
+**Takeaways:**
+- Hybrid search is best on all three metrics: +2.6 points nDCG@10 over BM25 and +6.7 over pure vector search.
+- On scientific text, BM25 beats pure vector search, because exact technical terms (genes, drugs, diseases) carry a lot of weight. A small general-purpose embedding model knows these terms less well.
+- Fusion still pays off: the two methods find partly different relevant documents, and RRF combines their strengths.
 
-## Schnellstart
+## Quickstart
 
-Voraussetzung: Python 3.9 oder neuer.
+Requires Python 3.9 or newer.
 
-> **Hinweis für Intel-Macs:** Für Intel-Macs gibt es PyTorch nur bis Version 2.2.2. Dann nach `pip install -r requirements.txt` zusätzlich ausführen:
+> **Note for Intel Macs:** PyTorch is only available up to version 2.2.2 on Intel Macs. In that case, run this after `pip install -r requirements.txt`:
 > `pip install "numpy<2" "transformers<4.50" "sentence-transformers<4"`
 
 ```bash
@@ -64,41 +64,41 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-python -m search.build           # lädt SciFact + Modell, baut den Index (~2–5 Min.)
-python -m search.evaluate        # vergleicht BM25, Vektor und Hybrid
-uvicorn app.main:app --reload    # Suchseite auf http://127.0.0.1:8000
-pytest                           # Tests (laufen offline mit Fake-Embedder)
+python -m search.build           # downloads SciFact + model, builds the index (~2–5 min)
+python -m search.evaluate        # compares BM25, vector and hybrid
+uvicorn app.main:app --reload    # search page at http://127.0.0.1:8000
+pytest                           # tests (run offline with a fake embedder)
 ```
 
-API-Beispiel:
+API example:
 
 ```bash
 curl "http://127.0.0.1:8000/api/search?q=vitamin+D+fracture+risk&mode=hybrid&k=5"
 ```
 
-## Projektstruktur
+## Project structure
 
 ```
 search/
-  data.py       Download und Laden von SciFact (Korpus, Anfragen, Relevanzbewertungen)
-  embedder.py   Wrapper um sentence-transformers
-  index.py      SQLite-FTS5-Index, Vektorsuche, Hybrid-Ranking
+  data.py       download and load SciFact (corpus, queries, relevance judgements)
+  embedder.py   wrapper around sentence-transformers
+  index.py      SQLite FTS5 index, vector search, hybrid ranking
   fusion.py     Reciprocal Rank Fusion
   metrics.py    nDCG@k, Recall@k, MRR@k
-  build.py      CLI: Index bauen
-  evaluate.py   CLI: Methoden vergleichen
+  build.py      CLI: build the index
+  evaluate.py   CLI: compare methods
 app/
-  main.py       FastAPI-App
-  static/       Suchseite
-tests/          pytest-Tests
+  main.py       FastAPI app
+  static/       search page
+tests/          pytest tests
 ```
 
-## Mögliche Erweiterungen
+## Possible extensions
 
-- Cross-Encoder-Reranking der Top-20 für noch bessere Präzision
-- Gewichtete Fusion (BM25 vs. Vektor) und Tuning von `k` auf einem Validierungsset
-- Persistenter Vektorindex mit FAISS oder pgvector für größere Korpora
+- Cross-encoder reranking of the top 20 for even better precision
+- Weighted fusion (BM25 vs. vector) and tuning `k` on a validation set
+- Persistent vector index with FAISS or pgvector for larger corpora
 
-## Daten
+## Data
 
-[SciFact](https://github.com/allenai/scifact) (Wadden et al., 2020) in der Fassung des BEIR-Benchmarks (Thakur et al., 2021).
+[SciFact](https://github.com/allenai/scifact) (Wadden et al., 2020), as packaged in the BEIR benchmark (Thakur et al., 2021).
